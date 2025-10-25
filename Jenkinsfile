@@ -10,6 +10,7 @@ pipeline {
 
     tools {
         nodejs 'Node24'
+        allure 'allure'
     }
 
     stages {
