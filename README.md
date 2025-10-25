@@ -4,8 +4,24 @@
 ![Badge Allure](https://img.shields.io/badge/Allure-2.x-FF4F5A?logo=allure&logoColor=white)
 ![Badge Jenkins](https://img.shields.io/badge/Jenkins-Ready-D24939?logo=jenkins&logoColor=white)
 ![Badge Node](https://img.shields.io/badge/Node.js-18%2B-339933?logo=node.js&logoColor=white)
+![Badge Langue](https://img.shields.io/badge/Français-100%25-0055FF)
+![Badge Licence](https://img.shields.io/badge/Licence-ISC-8A2BE2)
 
-Cadre de tests end‑to‑end pour le site Revers.io, basé sur Cypress + Allure, structuré en Page Object Model, et prêt pour l’intégration continue avec Jenkins. Conçu pour être lisible, maintenable et rapide à exécuter.
+> Suite de tests end‑to‑end professionnelle pour Revers.io, basée sur Cypress + Allure, structurée en Page Object Model et prête pour l’intégration continue (Jenkins). Optimisée pour la clarté, la maintenabilité et l’observabilité.
+
+---
+
+## ✅ Ce qui a été mis en place
+
+- **Allure intégré de bout en bout**: `@shelex/cypress-allure-plugin` connecté, génération locale auto après chaque spec, publication en CI.
+- **Pièce jointe vidéo par spec**: la vidéo est copiée vers `allure-results/` et attachée au **dernier test de la spec** (évite les doublons).
+- **Nettoyage automatique avant run**: `before:run` supprime `allure-results/`, `allure-report/`, `cypress/screenshots/`, `cypress/videos/`.
+- **Config CI‑safe**: en CI (Jenkins), pas d’ouverture de navigateur; la publication Allure est gérée par le pipeline.
+- **Jenkinsfile en français**: étapes claires (checkout → install → clean → run → generate → publish), artefacts (captures/vidéos) archivés.
+- **POM consolidé**: `BasePage` dupliqués supprimés; interactions stabilisées; méthode `makeApiRequest()` ajoutée pour les tests API.
+- **README modernisé**: badges, sommaire, schémas, instructions claires; tout en français.
+
+---
 
 ---
 
@@ -42,6 +58,38 @@ flowchart LR
 ```
 
 > Astuce: en local, chaque spec terminée ouvre automatiquement le rapport. En CI, la publication est gérée par Jenkins (pas d’ouverture de navigateur).
+
+## 🔄 Flux d’exécution (avec vidéo)
+
+1. **Lancement**: `npx cypress run` (ou via Jenkins).
+2. **Nettoyage auto**: suppression des résultats/rapports/artefacts précédents.
+3. **Exécution des specs**: Cypress enregistre la vidéo par spec et prend des captures en cas d’échec.
+4. **Fin de spec (`after:spec`)**:
+   - Copie la vidéo dans `allure-results/`.
+   - Attache la vidéo au dernier test de la spec (attachment Allure: `Video`).
+   - En local: génère et ouvre `allure-report/`. En CI: passe la main au pipeline.
+5. **Publication (CI)**: Jenkins génère puis publie le rapport Allure; captures et vidéos archivées en artefacts.
+
+```mermaid
+sequenceDiagram
+  participant Dev as Dev/CI
+  participant Cypress
+  participant Allure as Allure Plugin
+  participant Results as allure-results/
+  participant Report as allure-report/
+  participant Jenkins
+
+  Dev->>Cypress: npx cypress run
+  Cypress->>Allure: Écrit les résultats JSON
+  Cypress->>Cypress: Enregistre la vidéo (spec)
+  Cypress->>Allure: after:spec → attache "Video" au dernier test
+  Allure->>Results: Sauvegarde JSON + vidéo
+  alt Local
+    Dev->>Report: allure generate + open
+  else CI
+    Jenkins->>Report: generate + publish
+  end
+```
 
 ## 🚀 Fonctionnalités clés
 
