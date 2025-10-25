@@ -8,26 +8,28 @@ pipeline {
         ALLURE_REPORT = 'allure-report'
         PATH = "/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin" // Node/npm görünmesi için
     }
-    
-    tools {
-        // Jenkins Tools > NodeJS installations > Node18 tanımlı olmalı
-        nodejs 'Node18'
-    }
 
     stages {
-        stage('Préparation NodeJS (auto)') {
+
+        stage('Préparation NodeJS / npm') {
             steps {
-                echo '🔧 Préparation de Node/npm via NVM si nécessaire...'
+                echo '🔧 NodeJS ve npm kontrol ediliyor / kuruluyor (NVM fallback)...'
                 sh '''bash -lc '
 set -e
 export NVM_DIR="$HOME/.nvm"
 mkdir -p "$NVM_DIR"
 [ -s "$NVM_DIR/nvm.sh" ] || curl -fsSL https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | bash
 [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
-nvm install 18 >/dev/null || true
+
+# Node yoksa NVM ile kur
+if ! command -v node >/dev/null 2>&1; then
+    echo "Node introuvable, installation via NVM..."
+    nvm install 18
+fi
+
 nvm use 18
-node --version
-npm --version
+node -v
+npm -v
 '
 '''
             }
@@ -44,8 +46,11 @@ npm --version
             steps {
                 echo '📦 Installation des dépendances...'
                 sh '''bash -lc '
-export NVM_DIR="$HOME/.nvm"; [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"; nvm use 18
+export NVM_DIR="$HOME/.nvm"
+[ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
+nvm use 18
 npm ci --cache .npm --prefer-offline
+'
 '''
             }
         }
@@ -56,6 +61,7 @@ npm ci --cache .npm --prefer-offline
                 sh '''bash -lc '
 rm -rf allure-results allure-report
 rm -rf cypress/screenshots cypress/videos
+'
 '''
             }
         }
@@ -64,14 +70,20 @@ rm -rf cypress/screenshots cypress/videos
             steps {
                 echo '🚀 Exécution des tests Cypress (Chrome headless)...'
                 sh '''bash -lc '
-export NVM_DIR="$HOME/.nvm"; [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"; nvm use 18
+export NVM_DIR="$HOME/.nvm"
+[ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
+nvm use 18
+
+# Chrome kontrol, yoksa Electron fallback
 if command -v google-chrome >/dev/null 2>&1 || [ -d "/Applications/Google Chrome.app" ]; then
-  BROWSER=chrome
+    BROWSER=chrome
 else
-  echo "Chrome introuvable, bascule sur Electron"
-  BROWSER=electron
+    echo "Chrome introuvable, bascule sur Electron"
+    BROWSER=electron
 fi
+
 npx cypress run --browser "$BROWSER" --headless --env allure=true
+'
 '''
             }
             post {
@@ -87,8 +99,11 @@ npx cypress run --browser "$BROWSER" --headless --env allure=true
             steps {
                 echo '📊 Génération du rapport Allure...'
                 sh '''bash -lc '
-export NVM_DIR="$HOME/.nvm"; [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"; nvm use 18
+export NVM_DIR="$HOME/.nvm"
+[ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
+nvm use 18
 npx allure generate allure-results --clean -o allure-report
+'
 '''
             }
             post {
@@ -112,6 +127,7 @@ npx allure generate allure-results --clean -o allure-report
                 ])
             }
         }
+
     }
 
     post {
