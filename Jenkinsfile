@@ -6,34 +6,13 @@ pipeline {
         LANG = 'fr_FR.UTF-8'
         ALLURE_RESULTS = 'allure-results'
         ALLURE_REPORT = 'allure-report'
-        PATH = "/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin" // Node/npm görünmesi için
+    }
+
+    tools {
+        nodejs 'Node24'
     }
 
     stages {
-
-        stage('Préparation NodeJS / npm') {
-            steps {
-                echo '🔧 NodeJS ve npm kontrol ediliyor / kuruluyor (NVM fallback)...'
-                sh '''bash -lc '
-set -e
-export NVM_DIR="$HOME/.nvm"
-mkdir -p "$NVM_DIR"
-[ -s "$NVM_DIR/nvm.sh" ] || curl -fsSL https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | bash
-[ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
-
-# Node yoksa NVM ile kur
-if ! command -v node >/dev/null 2>&1; then
-    echo "Node introuvable, installation via NVM..."
-    nvm install 18
-fi
-
-nvm use 18
-node -v
-npm -v
-'
-'''
-            }
-        }
 
         stage('Récupération du code') {
             steps {
@@ -45,46 +24,32 @@ npm -v
         stage('Installation des dépendances') {
             steps {
                 echo '📦 Installation des dépendances...'
-                sh '''bash -lc '
-export NVM_DIR="$HOME/.nvm"
-[ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
-nvm use 18
-npm ci --cache .npm --prefer-offline
-'
-'''
+                sh 'npm ci --cache .npm --prefer-offline'
             }
         }
 
         stage('Nettoyage des anciens résultats') {
             steps {
                 echo '🧹 Nettoyage des anciens résultats...'
-                sh '''bash -lc '
-rm -rf allure-results allure-report
-rm -rf cypress/screenshots cypress/videos
-'
-'''
+                sh '''
+                    rm -rf allure-results allure-report
+                    rm -rf cypress/screenshots cypress/videos
+                '''
             }
         }
 
         stage('Exécution des tests (Chrome headless)') {
             steps {
                 echo '🚀 Exécution des tests Cypress (Chrome headless)...'
-                sh '''bash -lc '
-export NVM_DIR="$HOME/.nvm"
-[ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
-nvm use 18
-
-# Chrome kontrol, yoksa Electron fallback
-if command -v google-chrome >/dev/null 2>&1 || [ -d "/Applications/Google Chrome.app" ]; then
-    BROWSER=chrome
-else
-    echo "Chrome introuvable, bascule sur Electron"
-    BROWSER=electron
-fi
-
-npx cypress run --browser "$BROWSER" --headless --env allure=true
-'
-'''
+                sh '''
+                    if command -v google-chrome >/dev/null 2>&1 || [ -d "/Applications/Google Chrome.app" ]; then
+                        BROWSER=chrome
+                    else
+                        echo "Chrome introuvable, bascule sur Electron"
+                        BROWSER=electron
+                    fi
+                    npx cypress run --browser "$BROWSER" --headless --env allure=true
+                '''
             }
             post {
                 always {
@@ -98,13 +63,7 @@ npx cypress run --browser "$BROWSER" --headless --env allure=true
         stage('Génération du rapport Allure') {
             steps {
                 echo '📊 Génération du rapport Allure...'
-                sh '''bash -lc '
-export NVM_DIR="$HOME/.nvm"
-[ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
-nvm use 18
-npx allure generate allure-results --clean -o allure-report
-'
-'''
+                sh 'npx allure generate allure-results --clean -o allure-report'
             }
             post {
                 always {

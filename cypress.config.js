@@ -22,6 +22,10 @@ module.exports = defineConfig({
     setupNodeEvents(on, config) {
       // Allure reporter
       allureWriter(on, config);
+      // Log début de spec (affiché dans la console Jenkins)
+      on('before:spec', (spec) => {
+        try { console.log(`🔵 Démarrage du spec: ${spec?.name || spec}`); } catch {}
+      });
       
       // Clean previous results before the run starts (no shell prompts, cross-shell safe)
       on('before:run', () => {
@@ -114,6 +118,16 @@ module.exports = defineConfig({
         } catch (e) {
           console.warn('Allure report generation/open failed:', e?.message);
         }
+      });
+      
+      on('after:run', (results) => {
+        try {
+          const t = results?.totalTests || 0;
+          const p = results?.totalPassed || 0;
+          const f = results?.totalFailed || 0;
+          const s = results?.totalSkipped || 0;
+          console.log(`✅ Résumé exécution: tests=${t}, réussis=${p}, échoués=${f}, ignorés=${s}`);
+        } catch {}
       });
       
       // Custom tasks
