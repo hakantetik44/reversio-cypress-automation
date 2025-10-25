@@ -154,7 +154,9 @@ pipeline {
                             def skipped = stats[2] ?: '0'
                             def tests = stats[3] ?: '0'
                             def duration = stats[4] ?: '0'
-                            def durationSec = Math.round(duration.toInteger() / 1000)
+
+                            // FIX: Utiliser .toInteger() au lieu de Math.round()
+                            def durationSec = (duration.toInteger() / 1000).toInteger()
 
                             echo ""
                             echo "╔════════════════════════════════════════════╗"
@@ -170,9 +172,12 @@ pipeline {
                             echo "  ⏱️  Durée totale     : ${durationSec}s"
                             echo ""
 
-                            // Afficher le taux de réussite
-                            def successRate = tests.toInteger() > 0 ?
-                                Math.round((passes.toInteger() * 100) / tests.toInteger()) : 0
+                            // FIX: Calcul du taux de réussite sans Math.round()
+                            def successRate = 0
+                            if (tests.toInteger() > 0) {
+                                successRate = ((passes.toInteger() * 100) / tests.toInteger()).toInteger()
+                            }
+
                             def rateIcon = successRate == 100 ? "🎉" :
                                           successRate >= 80 ? "✅" :
                                           successRate >= 60 ? "⚠️" : "❌"
