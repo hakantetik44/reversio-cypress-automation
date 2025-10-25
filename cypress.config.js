@@ -58,10 +58,10 @@ module.exports = defineConfig({
         });
       });
 
-      // After each spec, generate and open Allure report automatically
+      // After each spec, attach video to ONLY the last test of that spec, then generate/open report
       on('after:spec', (spec, results) => {
         try {
-          // If video exists, copy into allure-results and attach to each test result JSON
+          // If video exists, copy into allure-results and attach to the last test only
           if (results && results.video) {
             const allureResultsDir = config.env?.allureResultsPath || 'allure-results';
             const videoFileName = path.basename(results.video);
@@ -70,20 +70,49 @@ module.exports = defineConfig({
               fs.mkdirSync(allureResultsDir, { recursive: true });
               fs.copyFileSync(results.video, targetVideoPath);
               const files = fs.readdirSync(allureResultsDir).filter(f => f.endsWith('-result.json'));
-              files.forEach(file => {
-                const full = path.join(allureResultsDir, file);
+
+              // Try to find the last test by title in allure results
+              let candidateFile = null;
+              const lastTestTitle = Array.isArray(results.tests) && results.tests.length
+                ? (Array.isArray(results.tests[results.tests.length - 1].title)
+                    ? results.tests[results.tests.length - 1].title.join(' ')
+                    : results.tests[results.tests.length - 1].title)
+                : null;
+
+              if (lastTestTitle) {
+                for (const file of files) {
+                  try {
+                    const full = path.join(allureResultsDir, file);
+                    const json = JSON.parse(fs.readFileSync(full, 'utf-8'));
+                    if (json && (json.name === lastTestTitle || (json.fullName && json.fullName.includes(lastTestTitle)))) {
+                      candidateFile = full;
+                      break;
+                    }
+                  } catch {}
+                }
+              }
+
+              // Fallback: pick the newest result file
+              if (!candidateFile && files.length) {
+                const sorted = files
+                  .map(f => ({ f, t: fs.statSync(path.join(allureResultsDir, f)).mtimeMs }))
+                  .sort((a, b) => b.t - a.t);
+                candidateFile = path.join(allureResultsDir, sorted[0].f);
+              }
+
+              if (candidateFile) {
                 try {
-                  const json = JSON.parse(fs.readFileSync(full, 'utf-8'));
+                  const json = JSON.parse(fs.readFileSync(candidateFile, 'utf-8'));
                   json.attachments = json.attachments || [];
                   const already = json.attachments.some(a => a.name === 'Video');
                   if (!already) {
                     json.attachments.push({ name: 'Video', source: videoFileName, type: 'video/mp4' });
-                    fs.writeFileSync(full, JSON.stringify(json, null, 2));
+                    fs.writeFileSync(candidateFile, JSON.stringify(json, null, 2));
                   }
                 } catch (e) {
-                  console.warn('Failed to attach video to', file, e?.message);
+                  console.warn('Failed to attach video to last test result:', e?.message);
                 }
-              });
+              }
             } catch (e) {
               console.warn('Copy video failed:', e?.message);
             }
