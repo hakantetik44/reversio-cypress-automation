@@ -77,17 +77,44 @@ pipeline {
                 }
 
                 script {
-                    // Fusionner les rapports Mochawesome de tous les specs
-                    sh '''
-                        if [ -d "mochawesome-report" ] && [ "$(ls -A mochawesome-report/*.json 2>/dev/null)" ]; then
+                    echo ""
+                    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+                    echo "   TRAITEMENT DES RAPPORTS"
+                    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+                    // Fusionner les rapports Mochawesome si plusieurs fichiers JSON existent
+                    def mochawesomeFiles = sh(
+                        script: 'ls -1 mochawesome-report/*.json 2>/dev/null | wc -l',
+                        returnStdout: true
+                    ).trim().toInteger()
+
+                    if (mochawesomeFiles > 1) {
+                        echo "📊 Fusion de ${mochawesomeFiles} rapports Mochawesome..."
+                        sh '''
                             npx mochawesome-merge mochawesome-report/*.json > mochawesome-report/merged.json
-                            npx marge mochawesome-report/merged.json -o mochawesome-report --reportTitle "Tests Revers.io" --reportPageTitle "Rapport de Tests Cypress"
-                        fi
-                    '''
+                            npx marge mochawesome-report/merged.json -o mochawesome-report \
+                                --reportTitle "Tests Revers.io" \
+                                --reportPageTitle "Rapport de Tests Cypress" \
+                                --inline
+                        '''
+                    } else if (mochawesomeFiles == 1) {
+                        echo "📊 Génération du rapport Mochawesome..."
+                        sh '''
+                            REPORT_FILE=$(ls mochawesome-report/*.json | head -1)
+                            npx marge "$REPORT_FILE" -o mochawesome-report \
+                                --reportTitle "Tests Revers.io" \
+                                --reportPageTitle "Rapport de Tests Cypress" \
+                                --inline
+                        '''
+                    }
 
                     // Lecture et affichage du résumé des tests
-                    def reportFile = 'mochawesome-report/merged.json'
-                    if (fileExists(reportFile)) {
+                    def reportFile = mochawesomeFiles > 1 ? 'mochawesome-report/merged.json' : sh(
+                        script: 'ls mochawesome-report/*.json 2>/dev/null | head -1',
+                        returnStdout: true
+                    ).trim()
+
+                    if (reportFile && fileExists(reportFile)) {
                         def report = readJSON file: reportFile
                         def stats = report.stats
 
@@ -100,34 +127,74 @@ pipeline {
                         echo "  ❌ Tests échoués    : ${stats.failures}"
                         echo "  ⏭️  Tests ignorés    : ${stats.skipped}"
                         echo "  📊 Total            : ${stats.tests}"
-                        echo "  ⏱️  Durée           : ${stats.duration}ms"
+                        echo "  ⏱️  Durée           : ${Math.round(stats.duration / 1000)}s"
                         echo ""
                         echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
-                        // Afficher les tests échoués
-                        if (stats.failures > 0) {
+                        // Afficher les tests par spec avec icônes
+                        if (report.results) {
                             echo ""
+                            echo "📋 DÉTAIL PAR SPEC:"
+                            echo ""
+                            report.results.each { result ->
+                                def fileName = result.file ? new File(result.file).name : 'Unknown'
+                                def suiteStats = result.suites[0]?.tests ?: []
+                                def passes = suiteStats.findAll { it.pass }.size()
+                                def failures = suiteStats.findAll { it.fail }.size()
+                                def icon = failures > 0 ? '❌' : '✅'
+
+                                echo "  ${icon} ${fileName}"
+                                echo "     ✅ Réussis: ${passes}  ❌ Échoués: ${failures}"
+                            }
+                            echo ""
+                        }
+
+                        // Afficher la liste des tests échoués
+                        if (stats.failures > 0) {
+                            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
                             echo "❌ TESTS ÉCHOUÉS:"
                             echo ""
-                            report.results.each { suite ->
-                                suite.suites.each { s ->
-                                    s.tests.each { test ->
+                            report.results.each { result ->
+                                result.suites.each { suite ->
+                                    suite.tests.each { test ->
                                         if (test.fail) {
-                                            echo "  • ${test.title}"
+                                            echo "  ❌ ${test.title}"
                                             if (test.err?.message) {
-                                                echo "    └─ ${test.err.message}"
+                                                def errorMsg = test.err.message.split('\n')[0]
+                                                echo "     └─ ${errorMsg}"
                                             }
                                         }
                                     }
                                 }
                             }
                             echo ""
+                            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
                         }
+
+                        // Afficher tous les tests avec icônes
+                        echo ""
+                        echo "📝 LISTE COMPLÈTE DES TESTS:"
+                        echo ""
+                        report.results.each { result ->
+                            result.suites.each { suite ->
+                                if (suite.title) {
+                                    echo "  📦 ${suite.title}"
+                                }
+                                suite.tests.each { test ->
+                                    def icon = test.pass ? '✅' : (test.fail ? '❌' : '⏭️')
+                                    def duration = test.duration ? " (${Math.round(test.duration / 1000)}s)" : ""
+                                    echo "     ${icon} ${test.title}${duration}"
+                                }
+                            }
+                        }
+                        echo ""
 
                         // Définir le statut du build
                         if (stats.failures > 0) {
                             currentBuild.result = 'UNSTABLE'
                         }
+                    } else {
+                        echo "⚠️  Aucun rapport Mochawesome trouvé"
                     }
                 }
             }
@@ -137,16 +204,20 @@ pipeline {
                     archiveArtifacts artifacts: 'cypress/videos/**/*', allowEmptyArchive: true
                     archiveArtifacts artifacts: 'mochawesome-report/**/*', allowEmptyArchive: true
 
-                    // Publier le rapport HTML
-                    publishHTML([
-                        allowMissing: false,
-                        alwaysLinkToLastBuild: true,
-                        keepAll: true,
-                        reportDir: 'mochawesome-report',
-                        reportFiles: 'mochawesome.html',
-                        reportName: '📊 Rapport de Tests',
-                        reportTitles: 'Rapport Cypress'
-                    ])
+                    // Publier le rapport HTML si disponible
+                    script {
+                        if (fileExists('mochawesome-report/mochawesome.html')) {
+                            publishHTML([
+                                allowMissing: false,
+                                alwaysLinkToLastBuild: true,
+                                keepAll: true,
+                                reportDir: 'mochawesome-report',
+                                reportFiles: 'mochawesome.html',
+                                reportName: '📊 Rapport de Tests',
+                                reportTitles: 'Rapport Cypress'
+                            ])
+                        }
+                    }
                 }
             }
         }

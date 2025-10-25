@@ -1,1 +1,1 @@
-{"total":1,"items":[{"uid":"7a49baae139b57b34d62a97db479615a","name":"Tests de navigation Revers.io","statistic":{"failed":0,"broken":0,"skipped":0,"passed":4,"unknown":0,"total":4}}]}
+{"total":1,"items":[{"uid":"bf39073f1726eb4ca8a58d4cbeac9ea9","name":"Tests API Revers.io","statistic":{"failed":1,"broken":0,"skipped":0,"passed":13,"unknown":0,"total":14}}]}
