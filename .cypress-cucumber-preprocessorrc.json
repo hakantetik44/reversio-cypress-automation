@@ -1,0 +1,14 @@
+{
+  "stepDefinitions": "cypress/support/step_definitions/**/*.js",
+  "nonGlobalStepDefinitions": false,
+  "cucumberJson": {
+    "generate": true,
+    "outputFolder": "cypress/cucumber-json",
+    "filePrefix": "",
+    "fileSuffix": ".cucumber"
+  },
+  "messages": {
+    "enabled": true,
+    "output": "cypress/cucumber-json/messages.ndjson"
+  }
+}

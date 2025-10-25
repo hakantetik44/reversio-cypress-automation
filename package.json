@@ -1,0 +1,39 @@
+{
+  "name": "reversio-cypress-automation",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "cypress:open": "cypress open",
+    "cypress:run": "cypress run",
+    "cypress:run:chrome": "cypress run --browser chrome",
+    "cypress:run:firefox": "cypress run --browser firefox",
+    "cypress:run:edge": "cypress run --browser edge",
+    "test": "cypress run && npm run allure:generate && npm run allure:open",
+    "test:headed": "cypress run --headed",
+    "test:chrome": "cypress run --browser chrome && npm run allure:generate && npm run allure:open",
+    "test:firefox": "cypress run --browser firefox && npm run allure:generate && npm run allure:open",
+    "test:edge": "cypress run --browser edge && npm run allure:generate && npm run allure:open",
+    "allure:generate": "allure generate allure-results --clean -o allure-report",
+    "allure:open": "allure open allure-report",
+    "allure:serve": "allure serve allure-results",
+    "test:allure": "cypress run --env allure=true && npm run allure:generate && npm run allure:open",
+    "test:cucumber": "cypress run --spec 'cypress/e2e/features/**/*.feature'",
+    "test:cucumber:headed": "cypress run --headed --spec 'cypress/e2e/features/**/*.feature'",
+    "test:cucumber:chrome": "cypress run --browser chrome --spec 'cypress/e2e/features/**/*.feature'",
+    "clean": "rm -rf allure-results allure-report cypress/screenshots cypress/videos cypress/cucumber-json"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "devDependencies": {
+    "@badeball/cypress-cucumber-preprocessor": "^23.2.1",
+    "@bahmutov/cypress-esbuild-preprocessor": "^2.2.0",
+    "@cucumber/cucumber": "^12.2.0",
+    "@shelex/cypress-allure-plugin": "^2.41.2",
+    "allure-commandline": "^2.34.1",
+    "cypress": "^15.5.0",
+    "cypress-xpath": "^2.0.1"
+  }
+}

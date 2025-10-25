@@ -1,0 +1,56 @@
+{
+  "users": {
+    "validUser": {
+      "email": "test@revers.io",
+      "password": "password123",
+      "name": "Test User"
+    },
+    "invalidUser": {
+      "email": "invalid@email.com",
+      "password": "wrongpassword",
+      "name": "Invalid User"
+    },
+    "adminUser": {
+      "email": "admin@revers.io",
+      "password": "admin123",
+      "name": "Admin User"
+    }
+  },
+  "contactForm": {
+    "validData": {
+      "name": "John Doe",
+      "email": "john.doe@test.com",
+      "message": "I am interested in your platform"
+    },
+    "invalidData": {
+      "name": "John Doe",
+      "email": "invalid-email",
+      "message": "I am interested in your platform"
+    },
+    "emptyData": {
+      "name": "",
+      "email": "",
+      "message": ""
+    }
+  },
+  "api": {
+    "baseUrl": "https://api.revers.io",
+    "endpoints": {
+      "login": "/auth/login",
+      "logout": "/auth/logout",
+      "user": "/user/profile",
+      "dashboard": "/dashboard"
+    }
+  },
+  "testConfig": {
+    "timeouts": {
+      "short": 5000,
+      "medium": 10000,
+      "long": 30000
+    },
+    "retries": {
+      "max": 3,
+      "delay": 1000
+    }
+  }
+}
