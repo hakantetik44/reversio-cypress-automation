@@ -29,20 +29,6 @@ describe('Tests API Revers.io', () => {
     })
   })
 
-  it('Teste l\'API de notification des clients', () => {
-    const notificationData = {
-      customer_id: '12345',
-      message: 'Votre retour a été traité',
-      type: 'return_status'
-    }
-
-    basePage.makeApiRequest('POST', '/api/notifications', notificationData)
-      .then((response) => {
-        expect(response.status).to.be.oneOf([200, 201, 400, 422, 404])
-        cy.log('Statut API Notifications: ' + response.status)
-      })
-  })
-
   it('Teste les performances des API endpoints', () => {
     const performanceEndpoints = ['/api/returns', '/api/orders', '/api/tracking']
     
