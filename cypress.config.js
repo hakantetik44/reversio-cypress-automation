@@ -1,8 +1,5 @@
 const { defineConfig } = require('cypress');
 const allureWriter = require('@shelex/cypress-allure-plugin/writer');
-const createBundler = require('@bahmutov/cypress-esbuild-preprocessor');
-const { addCucumberPreprocessorPlugin } = require('@badeball/cypress-cucumber-preprocessor');
-const { createEsbuildPlugin } = require('@badeball/cypress-cucumber-preprocessor/esbuild');
 const fs = require('fs');
 const path = require('path');
 const { execSync } = require('child_process');
@@ -19,21 +16,10 @@ module.exports = defineConfig({
     responseTimeout: 10000,
     pageLoadTimeout: 30000,
     chromeWebSecurity: false,
-    experimentalSessionAndOrigin: false,
-    specPattern: [
-      'cypress/e2e/**/*.cy.js',
-      'cypress/e2e/features/**/*.feature'
-    ],
+    // experimentalSessionAndOrigin removed since Cypress v12
+    specPattern: 'cypress/e2e/**/*.cy.js',
     supportFile: 'cypress/support/e2e.js',
     setupNodeEvents(on, config) {
-      // Cucumber preprocessor - must be first
-      addCucumberPreprocessorPlugin(on, config);
-      
-      // ESBuild bundler for Cucumber
-      on('file:preprocessor', createBundler({
-        plugins: [createEsbuildPlugin(config)]
-      }));
-      
       // Allure reporter
       allureWriter(on, config);
       
@@ -58,7 +44,7 @@ module.exports = defineConfig({
         });
       });
 
-      // After each spec, attach video to ONLY the last test of that spec, then generate/open report
+      // After each spec, attach video to ONLY the last test of that spec.
       on('after:spec', (spec, results) => {
         try {
           // If video exists, copy into allure-results and attach to the last test only
@@ -118,10 +104,13 @@ module.exports = defineConfig({
             }
           }
 
-          // Generate report fresh each time
-          execSync('allure generate allure-results --clean -o allure-report', { stdio: 'ignore' });
-          // Open report (detached) - avoid blocking the Cypress process
-          execSync('allure open allure-report', { stdio: 'ignore' });
+          // In CI (Jenkins) we do NOT generate/open here; Jenkins handles publishing.
+          const isCI = process.env.CI === 'true' || !!process.env.JENKINS_URL;
+          if (!isCI) {
+            // Generate and open locally for developer convenience
+            execSync('allure generate allure-results --clean -o allure-report', { stdio: 'ignore' });
+            execSync('allure open allure-report', { stdio: 'ignore' });
+          }
         } catch (e) {
           console.warn('Allure report generation/open failed:', e?.message);
         }

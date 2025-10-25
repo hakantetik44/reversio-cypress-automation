@@ -1,37 +1,59 @@
-# Revers.io Cypress Automation - QA Lead Interview Project
+# Revers.io – Automatisation Cypress
 
-Ce projet démontre une solution complète d'automatisation de tests pour la plateforme Revers.io, utilisant Cypress, Cucumber.js, et des pratiques de test modernes.
+![Badge Cypress](https://img.shields.io/badge/Cypress-15.x-04C38E?logo=cypress&logoColor=white)
+![Badge Allure](https://img.shields.io/badge/Allure-2.x-FF4F5A?logo=allure&logoColor=white)
+![Badge Jenkins](https://img.shields.io/badge/Jenkins-Ready-D24939?logo=jenkins&logoColor=white)
+![Badge Node](https://img.shields.io/badge/Node.js-18%2B-339933?logo=node.js&logoColor=white)
 
-## 🎯 Objectif du Projet
+Cadre de tests end‑to‑end pour le site Revers.io, basé sur Cypress + Allure, structuré en Page Object Model, et prêt pour l’intégration continue avec Jenkins. Conçu pour être lisible, maintenable et rapide à exécuter.
 
-Ce projet a été créé pour démontrer les compétences en automatisation de tests lors d'un entretien pour le poste de QA Lead chez Revers.io. Il showcase:
+---
 
-- **Expertise technique** en automatisation de tests
-- **Page Object Model** pour une architecture maintenable
-- **BDD avec Cucumber.js** pour des tests lisibles
-- **Rapports Allure** pour une visualisation professionnelle
-- **Pipeline Jenkins** pour l'intégration continue
-- **Tests cross-browser** et responsive
-- **Tests de performance** et d'accessibilité
+## 🧭 Sommaire
 
-## 🚀 Fonctionnalités
+- **[Aperçu du projet](#-aperçu-du-projet)**
+- **[Fonctionnalités clés](#-fonctionnalités-clés)**
+- **[Prérequis](#-prérequis)**
+- **[Installation](#-installation)**
+- **[Utilisation](#-utilisation)**
+- **[Rapports Allure](#-rapports-allure)**
+- **[Structure du projet](#-structure-du-projet)**
+- **[Pipeline Jenkins](#-pipeline-jenkins)**
+- **[Bonnes pratiques](#-bonnes-pratiques)**
 
-- **Tests Cypress**: Tests end-to-end avec Cypress
-- **Cucumber.js**: Tests BDD avec syntaxe Gherkin en français
-- **Page Object Model**: Structure de tests maintenable
-- **Rapports Allure**: Rapports de tests professionnels
-- **Intégration Jenkins**: Pipeline CI/CD complet
-- **Tests cross-browser**: Chrome, Firefox, Safari, Edge
-- **Tests responsive**: Mobile, tablette, desktop
-- **Tests de performance**: Temps de chargement et Core Web Vitals
-- **Tests d'accessibilité**: Conformité WCAG
-- **Tests API**: Validation des API REST
+---
+
+## ✨ Aperçu du projet
+
+- Architecture **Page Object Model (POM)** claire et évolutive.
+- **Allure** intégré: pièces jointes automatiques (captures, vidéo par spec), ouverture locale automatique, publication en CI.
+- **Jenkinsfile** prêt‑à‑l’emploi (français) avec nettoyage, exécution headless, génération et publication du rapport.
+- Tests **front** (navigation) et **API** (requêtes génériques via `makeApiRequest`).
+
+```mermaid
+flowchart LR
+  A[Tests Cypress] --> B[POM: HomePage / BasePage]
+  B --> C[Locators centralisés]
+  A --> D[Allure Plugin]
+  D --> E[allure-results/]
+  E --> F[allure-report/]
+  F -->|Local| G[(Navigateur)]
+  E -->|CI| H[Jenkins Allure]
+```
+
+> Astuce: en local, chaque spec terminée ouvre automatiquement le rapport. En CI, la publication est gérée par Jenkins (pas d’ouverture de navigateur).
+
+## 🚀 Fonctionnalités clés
+
+- **Cypress**: Tests E2E front et API rapides et fiables
+- **POM**: Sélecteurs et actions réutilisables, maintenance simplifiée
+- **Allure**: Vidéos attachées au dernier test de chaque spec + captures d’écran en échec
+- **CI prête**: Pipeline Jenkins francisé et minimaliste
 
 ## 📋 Prérequis
 
 - Node.js (v18 ou supérieur)
 - npm (v8 ou supérieur)
-- Navigateur Chrome (pour les tests)
 - Allure CLI (pour les rapports)
 
 ## 🛠️ Installation
@@ -68,9 +90,14 @@ npm run cypress:run:firefox
 npm run cypress:run:edge
 ```
 
+#### Exécuter un spec précis (ex: Frontend):
+```bash
+npx cypress run --spec cypress/e2e/frontend.cy.js
+```
+
 ### Rapports Allure
 
-#### Générer le rapport Allure:
+#### Générer le rapport Allure (manuel):
 ```bash
 npm run allure:generate
 ```
@@ -85,30 +112,25 @@ npm run allure:open
 npm run allure:serve
 ```
 
-### Script de Démonstration
-
-Exécuter la démonstration complète:
-```bash
-./demo.sh
-```
+Note: en local, le rapport s’ouvre automatiquement à la fin de chaque spec grâce au hook `after:spec` dans `cypress.config.js`. En CI (Jenkins), l’ouverture automatique est désactivée et la publication est faite par le plugin Allure.
 
 ## 📁 Structure du Projet
 
 ```
 cypress/
 ├── e2e/
-│   ├── frontend.cy.js            # Tests frontend
+│   ├── frontend.cy.js            # Tests Front
 │   └── api.cy.js                 # Tests API
 ├── fixtures/
 │   └── testData.json            # Données de test
 ├── support/
 │   ├── commands.js             # Commandes personnalisées
-│   ├── e2e.js                  # Configuration e2e
+│   ├── e2e.js                  # Bootstrap + Allure plugin
+│   ├── locators/
+│   │   └── HomePageLocators.js # Sélecteurs centralisés
 │   └── pages/                  # Page Object Model
-│       ├── BasePage.js        # Page de base
-│       ├── HomePage.js        # Page d'accueil
-│       ├── LoginPage.js       # Page de connexion
-│       └── ReversioPlatformPage.js # Page de la plateforme
+│       ├── BasePage.js        # Méthodes communes (click, navigate, API...)
+│       └── HomePage.js        # Page d'accueil / navigation
 ├── screenshots/                # Captures d'écran
 └── videos/                    # Vidéos des tests
 ```
@@ -134,40 +156,39 @@ cypress/
 
 ## 🔧 Pipeline Jenkins
 
-Le projet inclut un pipeline Jenkins qui:
-- Installe les dépendances
-- Exécute les tests sur plusieurs navigateurs
-- Génère les rapports Allure
-- Archive les artefacts
-- Envoie des notifications par email
+Le pipeline `Jenkinsfile` (français) exécute:
+- Nettoyage des anciens résultats
+- `npx cypress run --browser chrome --headless --env allure=true`
+- Génération du rapport Allure: `npx allure generate allure-results --clean -o allure-report`
+- Publication via le plugin Allure Jenkins
+
+Astuce: active le plugin "Allure Jenkins" et configure le chemin `allure-results`.
 
 ## ⚙️ Configuration
 
 ### Configuration Cypress
-- URL de base: https://revers.io
+- URL de base: https://www.revers.io/fr
 - Viewport: 1280x720
 - Enregistrement vidéo: Activé
 - Captures d'écran en cas d'échec: Activé
 - Timeout par défaut: 10 secondes
 
 ### Configuration Allure
-- Répertoire des résultats: allure-results
-- Répertoire des rapports: allure-report
-- Catégories: Échoués, Cassés, Ignorés, Réussis
+- Résultats: `allure-results/`
+- Rapport: `allure-report/`
+- Ouverture auto locale: activée après chaque spec (désactivée en CI)
 
-## 🎯 Points Clés pour l'Entretien
+## 🧭 Bonnes Pratiques
 
-### Architecture et Design Patterns
-- **Page Object Model**: Séparation claire entre les tests et les éléments de page
-- **BasePage**: Classe de base avec des méthodes communes
-- **Sélecteurs centralisés**: Gestion des sélecteurs dans les classes de page
-- **Méthodes de retry**: Gestion des éléments instables
+### Architecture
+- **Page Object Model** clair
+- **BasePage**: méthodes communes (navigation, interactions, API)
+- **Locators** centralisés
 
-### Qualité des Tests
-- **Tests en français**: Scénarios BDD lisibles par les parties prenantes
-- **Couverture complète**: Tests fonctionnels, de sécurité, de performance
-- **Tests de données**: Utilisation de tables de données pour les tests
-- **Tests négatifs**: Validation des cas d'erreur
+### Qualité
+- Scénarios en français
+- Captures + vidéos en cas d’échec
+- Rapport Allure riche (attachments)
 
 ### Intégration et DevOps
 - **Pipeline Jenkins**: Automatisation complète du processus
@@ -181,27 +202,13 @@ Le projet inclut un pipeline Jenkins qui:
 - **Performance**: Tests de temps de chargement
 - **Accessibilité**: Tests de conformité WCAG
 
-## 📊 Métriques de Qualité
+## 📊 Conseils
+- Lancer localement un seul spec lors du dev pour accélérer le feedback
+- En CI, préférer le headless et Chrome stable
 
-- **Couverture de test**: Tests fonctionnels complets
-- **Stabilité**: Gestion des éléments instables
-- **Performance**: Tests de temps de réponse
-- **Sécurité**: Tests de vulnérabilités
-- **Accessibilité**: Tests de conformité
-
-## 🚀 Démonstration
-
-Pour une démonstration complète:
-
-1. Exécuter le script de démonstration:
-```bash
-./demo.sh
-```
-
-2. Montrer les rapports Allure
-3. Expliquer l'architecture Page Object Model
-4. Démontrer le pipeline Jenkins
-5. Discuter des scénarios de test et de la couverture
+## 🚀 Conseils d’utilisation
+- Local: `npx cypress run --spec cypress/e2e/frontend.cy.js`
+- Forcer la régénération Allure: `npm run allure:generate && npm run allure:open`
 
 ## 📝 Notes pour l'Entretien
 

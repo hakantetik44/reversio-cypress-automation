@@ -4,24 +4,15 @@ class BasePage {
   }
 
   // Méthodes de base
+  // (unifiée) click avec attente et options
   click(selector, options = {}) {
-    const { timeout = this.defaultTimeout, force = false } = options
-    return cy.get(selector, { timeout }).click({ force })
-  }
-
-  hover(selector) {
-    return cy.get(selector).realHover()
-  }
-
-  isVisible(selector, options = {}) {
-    const { timeout = this.defaultTimeout } = options
-    return cy.get(selector, { timeout }).should('be.visible')
-  }
-
-  // Navigation
-  navigateTo(path) {
-    cy.visit(path)
-    cy.wait(1000) // Court délai pour la navigation
+    const { timeout = this.defaultTimeout, force = false, multiple = false } = options
+    return cy.waitForElement(selector, timeout).then(($el) => {
+      if (multiple) {
+        return cy.get(selector).click({ multiple: true, force })
+      }
+      return $el.click({ force })
+    })
   }
 
   // Attendre le chargement de la page
@@ -70,20 +61,6 @@ class BasePage {
     }
   }
 
-  // Méthodes de base pour les interactions
-  click(selector, options = {}) {
-    const { timeout = this.defaultTimeout, force = false, multiple = false } = options
-    
-    // Attendre que l'élément soit visible
-    return cy.waitForElement(selector, timeout)
-      .then(($el) => {
-        if (multiple) {
-          return cy.get(selector).click({ multiple: true, force })
-        }
-        return $el.click({ force })
-      })
-  }
-
   type(selector, text, options = {}) {
     const { timeout = this.defaultTimeout } = options
     return cy.get(selector, { timeout }).clear().type(text)
@@ -107,7 +84,7 @@ class BasePage {
   // Navigation simplifiée
   navigateTo(path = '') {
     cy.visit(path)
-    cy.wait(1000) // Court délai pour la navigation
+    cy.wait(1000)
   }
 
   // Utilitaires
@@ -116,11 +93,7 @@ class BasePage {
   }
 
   hover(menuSelector) {
-    // Cliquer d'abord sur le menu pour l'activer (si nécessaire)
-    return cy.get(menuSelector)
-      .first()
-      .click({force: true})
-      .wait(500) // Court délai pour l'animation
+    return cy.get(menuSelector).first().click({ force: true }).wait(500)
   }
 
   // Effectuer une action de survol
@@ -145,6 +118,18 @@ class BasePage {
       
     cy.wait(300);
     return this;
+  }
+
+  // Requête API générique utilisée par les tests API
+  makeApiRequest(method, url, body = null, options = {}) {
+    const { failOnStatusCode = false, headers = {} } = options
+    return cy.request({
+      method,
+      url,
+      body,
+      headers,
+      failOnStatusCode
+    })
   }
 }
 
