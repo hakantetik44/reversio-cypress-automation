@@ -48,7 +48,8 @@ pipeline {
                         echo "Chrome introuvable, bascule sur Electron"
                         BROWSER=electron
                     fi
-                    npx cypress run --browser "$BROWSER" --headless --env allure=true
+                    # Sade ve temiz çıktı için spec reporter kullanıyoruz ve renkleri kapatıyoruz
+                    FORCE_COLOR=0 npx cypress run --browser "$BROWSER" --headless --reporter spec --reporter-options mochaFile=reports/junit/results-[hash].xml,toConsole=true
                 '''
             }
             post {
@@ -56,6 +57,7 @@ pipeline {
                     echo '📸 Archivage des captures et vidéos...'
                     archiveArtifacts artifacts: 'cypress/screenshots/**/*', allowEmptyArchive: true
                     archiveArtifacts artifacts: 'cypress/videos/**/*', allowEmptyArchive: true
+                    junit 'reports/junit/*.xml'
                 }
             }
         }
