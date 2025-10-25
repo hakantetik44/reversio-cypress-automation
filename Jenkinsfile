@@ -109,7 +109,7 @@ pipeline {
                         '''
                     }
 
-                    // Analyser les résultats avec shell script (pas besoin de readJSON plugin)
+                    // Analyser les résultats avec shell script
                     def reportExists = sh(
                         script: 'test -f mochawesome-report/merged.json && echo "true" || test -f mochawesome-report/mochawesome.json && echo "true" || echo "false"',
                         returnStdout: true
@@ -154,7 +154,7 @@ pipeline {
                             def skipped = stats[2] ?: '0'
                             def tests = stats[3] ?: '0'
                             def duration = stats[4] ?: '0'
-                            def durationSec = (duration.toInteger() / 1000).round()
+                            def durationSec = Math.round(duration.toInteger() / 1000)
 
                             echo ""
                             echo "╔════════════════════════════════════════════╗"
@@ -168,6 +168,15 @@ pipeline {
                             echo "  ⏭️  Tests ignorés     : ${skipped}"
                             echo "  📊 Total             : ${tests}"
                             echo "  ⏱️  Durée totale     : ${durationSec}s"
+                            echo ""
+
+                            // Afficher le taux de réussite
+                            def successRate = tests.toInteger() > 0 ?
+                                Math.round((passes.toInteger() * 100) / tests.toInteger()) : 0
+                            def rateIcon = successRate == 100 ? "🎉" :
+                                          successRate >= 80 ? "✅" :
+                                          successRate >= 60 ? "⚠️" : "❌"
+                            echo "  ${rateIcon} Taux de réussite : ${successRate}%"
                             echo ""
                             echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
@@ -220,6 +229,18 @@ pipeline {
                                 echo ""
                                 echo "✅ Tous les tests sont passés avec succès !"
                             }
+
+                            // Afficher les rapports disponibles
+                            echo ""
+                            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+                            echo "📊 RAPPORTS DISPONIBLES:"
+                            echo ""
+                            echo "  📄 Rapport Mochawesome → Build Artifacts → mochawesome-report/mochawesome.html"
+                            echo "  📄 Rapport Allure      → Lien 'Allure Report' dans la barre latérale"
+                            echo "  🎥 Vidéos             → Build Artifacts → cypress/videos/"
+                            echo "  📸 Captures           → Build Artifacts → cypress/screenshots/"
+                            echo ""
+                            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
                         } else {
                             echo "⚠️  Impossible de lire les statistiques du rapport"
                         }
@@ -266,31 +287,39 @@ pipeline {
             }
         }
 
-        stage('📊 Génération Allure') {
-            when {
-                expression { fileExists('allure-results') }
-            }
+        stage('📊 Génération du rapport Allure') {
             steps {
                 script {
-                    echo ""
-                    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-                    echo "   📊 GÉNÉRATION DU RAPPORT ALLURE"
-                    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-                }
-                sh 'npx allure generate allure-results --clean -o allure-report'
+                    // Vérifier si des résultats Allure existent
+                    def allureExists = sh(
+                        script: 'test -d allure-results && ls -A allure-results 2>/dev/null | wc -l',
+                        returnStdout: true
+                    ).trim().toInteger()
 
-                script {
-                    try {
-                        allure([
-                            includeProperties: false,
-                            jdk: '',
-                            properties: [],
-                            reportBuildPolicy: 'ALWAYS',
-                            results: [[path: 'allure-results']]
-                        ])
-                        echo "✅ Rapport Allure généré avec succès"
-                    } catch (Exception e) {
-                        echo "ℹ️  Plugin Allure non disponible - Le rapport est archivé dans les artefacts"
+                    if (allureExists > 0) {
+                        echo ""
+                        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+                        echo "   📊 GÉNÉRATION DU RAPPORT ALLURE"
+                        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+                        sh 'npx allure generate allure-results --clean -o allure-report'
+
+                        try {
+                            allure([
+                                includeProperties: false,
+                                jdk: '',
+                                properties: [],
+                                reportBuildPolicy: 'ALWAYS',
+                                results: [[path: 'allure-results']]
+                            ])
+                            echo "✅ Rapport Allure généré et publié avec succès"
+                        } catch (Exception e) {
+                            echo "ℹ️  Plugin Allure non disponible - Le rapport HTML est archivé dans les artefacts"
+                            archiveArtifacts artifacts: 'allure-report/**/*', allowEmptyArchive: true
+                        }
+                    } else {
+                        echo ""
+                        echo "ℹ️  Aucun résultat Allure trouvé - étape ignorée"
                     }
                 }
             }
