@@ -4,8 +4,8 @@ pipeline {
     environment {
         CI = 'true'
         LANG = 'fr_FR.UTF-8'
-        ALLURE_RESULTS = 'allure-results'
-        ALLURE_REPORT = 'allure-report'
+        FORCE_COLOR = '0'
+        NO_COLOR = '1'
     }
 
     tools {
@@ -14,71 +14,155 @@ pipeline {
 
     stages {
 
-        stage('Récupération du code') {
+        stage('📥 Récupération du code') {
             steps {
-                echo '📥 Récupération du code...'
+                script {
+                    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+                    echo "   RÉCUPÉRATION DU CODE"
+                    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+                }
                 checkout scm
             }
         }
 
-        stage('Installation des dépendances') {
+        stage('📦 Installation des dépendances') {
             steps {
-                echo '📦 Installation des dépendances...'
-                sh 'npm ci --cache .npm --prefer-offline'
+                script {
+                    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+                    echo "   INSTALLATION DES DÉPENDANCES"
+                    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+                }
+                sh 'npm ci --cache .npm --prefer-offline --silent'
             }
         }
 
-        stage('Nettoyage des anciens résultats') {
+        stage('🧹 Nettoyage') {
             steps {
-                echo '🧹 Nettoyage des anciens résultats...'
+                script {
+                    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+                    echo "   NETTOYAGE DES ANCIENS RÉSULTATS"
+                    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+                }
                 sh '''
-                    rm -rf allure-results allure-report
+                    rm -rf allure-results allure-report mochawesome-report
                     rm -rf cypress/screenshots cypress/videos
+                    mkdir -p mochawesome-report
                 '''
             }
         }
 
-        stage('Exécution des tests (Chrome headless)') {
+        stage('🚀 Exécution des tests') {
             steps {
-                echo '🚀 Exécution des tests Cypress (Chrome headless)...'
-                sh '''
-                    if command -v google-chrome >/dev/null 2>&1 || [ -d "/Applications/Google Chrome.app" ]; then
-                        BROWSER=chrome
-                    else
-                        echo "Chrome introuvable, bascule sur Electron"
-                        BROWSER=electron
-                    fi
-                    # Sade ve temiz çıktı için spec reporter kullanıyoruz ve renkleri kapatıyoruz
-                    FORCE_COLOR=0 npx cypress run --browser "$BROWSER" --headless --reporter spec --reporter-options mochaFile=reports/junit/results-[hash].xml,toConsole=true
-                '''
+                script {
+                    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+                    echo "   EXÉCUTION DES TESTS CYPRESS"
+                    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+                    echo ""
+                }
+
+                catchError(buildResult: 'UNSTABLE', stageResult: 'FAILURE') {
+                    sh '''
+                        if command -v google-chrome >/dev/null 2>&1 || [ -d "/Applications/Google Chrome.app" ]; then
+                            BROWSER=chrome
+                        else
+                            BROWSER=electron
+                        fi
+
+                        # Exécution des tests avec les reporters configurés
+                        npx cypress run \
+                            --browser "$BROWSER" \
+                            --headless \
+                            --env allure=true
+                    '''
+                }
+
+                script {
+                    // Fusionner les rapports Mochawesome de tous les specs
+                    sh '''
+                        if [ -d "mochawesome-report" ] && [ "$(ls -A mochawesome-report/*.json 2>/dev/null)" ]; then
+                            npx mochawesome-merge mochawesome-report/*.json > mochawesome-report/merged.json
+                            npx marge mochawesome-report/merged.json -o mochawesome-report --reportTitle "Tests Revers.io" --reportPageTitle "Rapport de Tests Cypress"
+                        fi
+                    '''
+
+                    // Lecture et affichage du résumé des tests
+                    def reportFile = 'mochawesome-report/merged.json'
+                    if (fileExists(reportFile)) {
+                        def report = readJSON file: reportFile
+                        def stats = report.stats
+
+                        echo ""
+                        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+                        echo "   RÉSULTATS DES TESTS"
+                        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+                        echo ""
+                        echo "  ✅ Tests réussis    : ${stats.passes}"
+                        echo "  ❌ Tests échoués    : ${stats.failures}"
+                        echo "  ⏭️  Tests ignorés    : ${stats.skipped}"
+                        echo "  📊 Total            : ${stats.tests}"
+                        echo "  ⏱️  Durée           : ${stats.duration}ms"
+                        echo ""
+                        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+                        // Afficher les tests échoués
+                        if (stats.failures > 0) {
+                            echo ""
+                            echo "❌ TESTS ÉCHOUÉS:"
+                            echo ""
+                            report.results.each { suite ->
+                                suite.suites.each { s ->
+                                    s.tests.each { test ->
+                                        if (test.fail) {
+                                            echo "  • ${test.title}"
+                                            if (test.err?.message) {
+                                                echo "    └─ ${test.err.message}"
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                            echo ""
+                        }
+
+                        // Définir le statut du build
+                        if (stats.failures > 0) {
+                            currentBuild.result = 'UNSTABLE'
+                        }
+                    }
+                }
             }
             post {
                 always {
-                    echo '📸 Archivage des captures et vidéos...'
                     archiveArtifacts artifacts: 'cypress/screenshots/**/*', allowEmptyArchive: true
                     archiveArtifacts artifacts: 'cypress/videos/**/*', allowEmptyArchive: true
-                    junit 'reports/junit/*.xml'
+                    archiveArtifacts artifacts: 'mochawesome-report/**/*', allowEmptyArchive: true
+
+                    // Publier le rapport HTML
+                    publishHTML([
+                        allowMissing: false,
+                        alwaysLinkToLastBuild: true,
+                        keepAll: true,
+                        reportDir: 'mochawesome-report',
+                        reportFiles: 'mochawesome.html',
+                        reportName: '📊 Rapport de Tests',
+                        reportTitles: 'Rapport Cypress'
+                    ])
                 }
             }
         }
 
-        stage('Génération du rapport Allure') {
+        stage('📊 Génération Allure') {
+            when {
+                expression { fileExists('allure-results') }
+            }
             steps {
-                echo '📊 Génération du rapport Allure...'
+                script {
+                    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+                    echo "   GÉNÉRATION DU RAPPORT ALLURE"
+                    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+                }
                 sh 'npx allure generate allure-results --clean -o allure-report'
-            }
-            post {
-                always {
-                    echo '📁 Archivage des résultats Allure...'
-                    archiveArtifacts artifacts: 'allure-results/**/*', allowEmptyArchive: true
-                    archiveArtifacts artifacts: 'allure-report/**/*', allowEmptyArchive: true
-                }
-            }
-        }
 
-        stage('Publication Allure') {
-            steps {
-                echo '📈 Publication du rapport Allure...'
                 allure([
                     includeProperties: false,
                     jdk: '',
@@ -88,13 +172,41 @@ pipeline {
                 ])
             }
         }
-
     }
 
     post {
         always {
-            echo '🧹 Nettoyage final du workspace...'
-            sh 'rm -rf cypress_cache || true'
+            script {
+                echo ""
+                echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+                echo "   NETTOYAGE FINAL"
+                echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            }
+            sh 'rm -rf cypress_cache .npm || true'
+        }
+        success {
+            script {
+                echo ""
+                echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+                echo "   ✅ BUILD RÉUSSI"
+                echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            }
+        }
+        unstable {
+            script {
+                echo ""
+                echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+                echo "   ⚠️  BUILD INSTABLE - CERTAINS TESTS ONT ÉCHOUÉ"
+                echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            }
+        }
+        failure {
+            script {
+                echo ""
+                echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+                echo "   ❌ BUILD ÉCHOUÉ"
+                echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            }
         }
     }
 }

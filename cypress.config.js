@@ -16,22 +16,43 @@ module.exports = defineConfig({
     responseTimeout: 10000,
     pageLoadTimeout: 30000,
     chromeWebSecurity: false,
-    // experimentalSessionAndOrigin removed since Cypress v12
     specPattern: 'cypress/e2e/**/*.cy.js',
     supportFile: 'cypress/support/e2e.js',
+
+    // Utiliser Mochawesome comme reporter principal
+    reporter: 'mochawesome',
+    reporterOptions: {
+      reportDir: 'mochawesome-report',
+      overwrite: false,
+      html: true,
+      json: true,
+      charts: true,
+      reportTitle: 'Tests Revers.io',
+      reportPageTitle: 'Rapport de Tests Cypress',
+      embeddedScreenshots: true,
+      inlineAssets: true,
+      saveAllAttempts: false,
+      code: false,
+      timestamp: 'mmddyyyy_HHMMss'
+    },
+
     setupNodeEvents(on, config) {
-      // Allure reporter
+      // Allure reporter (fonctionne en parallèle via le plugin)
       allureWriter(on, config);
+
       // Log début de spec (affiché dans la console Jenkins)
       on('before:spec', (spec) => {
-        try { console.log(`🔵 Démarrage du spec: ${spec?.name || spec}`); } catch {}
+        try {
+          console.log(`🔵 Démarrage du spec: ${spec?.name || spec}`);
+        } catch {}
       });
-      
-      // Clean previous results before the run starts (no shell prompts, cross-shell safe)
+
+      // Clean previous results before the run starts
       on('before:run', () => {
         const toRemove = [
           'allure-results',
           'allure-report',
+          'mochawesome-report',
           path.join('cypress', 'screenshots'),
           path.join('cypress', 'videos')
         ];
@@ -42,6 +63,9 @@ module.exports = defineConfig({
             if (p === 'allure-results') {
               fs.mkdirSync('allure-results', { recursive: true });
             }
+            if (p === 'mochawesome-report') {
+              fs.mkdirSync('mochawesome-report', { recursive: true });
+            }
           } catch (e) {
             console.warn('Cleanup warning for', p, e?.message);
           }
@@ -51,6 +75,16 @@ module.exports = defineConfig({
       // After each spec, attach video to ONLY the last test of that spec.
       on('after:spec', (spec, results) => {
         try {
+          // Afficher un résumé propre pour chaque spec
+          if (results && results.stats) {
+            const stats = results.stats;
+            console.log(`\n📊 Résultat pour ${spec.name}:`);
+            console.log(`   ✅ Réussis: ${stats.passes || 0}`);
+            console.log(`   ❌ Échoués: ${stats.failures || 0}`);
+            console.log(`   ⏭️  Ignorés: ${stats.skipped || 0}`);
+            console.log(`   ⏱️  Durée: ${Math.round((stats.duration || 0) / 1000)}s\n`);
+          }
+
           // If video exists, copy into allure-results and attach to the last test only
           if (results && results.video) {
             const allureResultsDir = config.env?.allureResultsPath || 'allure-results';
@@ -112,24 +146,37 @@ module.exports = defineConfig({
           const isCI = process.env.CI === 'true' || !!process.env.JENKINS_URL;
           if (!isCI) {
             // Generate and open locally for developer convenience
-            execSync('allure generate allure-results --clean -o allure-report', { stdio: 'ignore' });
-            execSync('allure open allure-report', { stdio: 'ignore' });
+            try {
+              execSync('allure generate allure-results --clean -o allure-report', { stdio: 'ignore' });
+              execSync('allure open allure-report', { stdio: 'ignore' });
+            } catch {}
           }
         } catch (e) {
-          console.warn('Allure report generation/open failed:', e?.message);
+          console.warn('Post-spec processing failed:', e?.message);
         }
       });
-      
+
       on('after:run', (results) => {
         try {
           const t = results?.totalTests || 0;
           const p = results?.totalPassed || 0;
           const f = results?.totalFailed || 0;
           const s = results?.totalSkipped || 0;
-          console.log(`✅ Résumé exécution: tests=${t}, réussis=${p}, échoués=${f}, ignorés=${s}`);
+
+          console.log('\n' + '━'.repeat(50));
+          console.log('✅ RÉSUMÉ FINAL DES TESTS');
+          console.log('━'.repeat(50));
+          console.log(`   Total de tests: ${t}`);
+          console.log(`   Réussis: ${p}`);
+          console.log(`   Échoués: ${f}`);
+          console.log(`   Ignorés: ${s}`);
+          if (results.totalDuration) {
+            console.log(`   Durée totale: ${Math.round(results.totalDuration / 1000)}s`);
+          }
+          console.log('━'.repeat(50) + '\n');
         } catch {}
       });
-      
+
       // Custom tasks
       on('task', {
         log(message) {
@@ -141,7 +188,7 @@ module.exports = defineConfig({
           return null;
         }
       });
-      
+
       return config;
     },
     env: {

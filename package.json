@@ -1,7 +1,7 @@
 {
   "name": "reversio-cypress-automation",
   "version": "1.0.0",
-  "description": "",
+  "description": "Tests d'automatisation Cypress pour Revers.io avec rapports Mochawesome et Allure",
   "main": "index.js",
   "scripts": {
     "cypress:open": "cypress open",
@@ -18,9 +18,18 @@
     "allure:open": "allure open allure-report",
     "allure:serve": "allure serve allure-results",
     "test:allure": "cypress run --env allure=true",
-    "clean": "rm -rf allure-results allure-report cypress/screenshots cypress/videos"
+    "report:merge": "mochawesome-merge mochawesome-report/*.json > mochawesome-report/merged.json",
+    "report:generate": "marge mochawesome-report/merged.json -o mochawesome-report --reportTitle 'Tests Revers.io' --reportPageTitle 'Rapport de Tests Cypress'",
+    "report:mochawesome": "npm run report:merge && npm run report:generate",
+    "clean": "rm -rf allure-results allure-report mochawesome-report cypress/screenshots cypress/videos"
   },
-  "keywords": [],
+  "keywords": [
+    "cypress",
+    "testing",
+    "e2e",
+    "automation",
+    "revers.io"
+  ],
   "author": "",
   "license": "ISC",
   "type": "commonjs",
@@ -28,6 +37,10 @@
     "@shelex/cypress-allure-plugin": "^2.41.2",
     "allure-commandline": "^2.34.1",
     "cypress": "^15.5.0",
-    "cypress-xpath": "^2.0.1"
+    "cypress-multi-reporters": "^1.6.4",
+    "cypress-xpath": "^2.0.1",
+    "mochawesome": "^2.0.5",
+    "mochawesome-merge": "^5.0.0",
+    "mochawesome-report-generator": "^1.1.0"
   }
 }
