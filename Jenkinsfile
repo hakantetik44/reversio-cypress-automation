@@ -18,7 +18,7 @@ pipeline {
             steps {
                 script {
                     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-                    echo "   RÉCUPÉRATION DU CODE"
+                    echo "   RÉCUPÉRATION DU CODE SOURCE"
                     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
                 }
                 checkout scm
@@ -29,7 +29,7 @@ pipeline {
             steps {
                 script {
                     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-                    echo "   INSTALLATION DES DÉPENDANCES"
+                    echo "   INSTALLATION DES DÉPENDANCES NPM"
                     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
                 }
                 sh 'npm ci --cache .npm --prefer-offline --silent'
@@ -51,11 +51,12 @@ pipeline {
             }
         }
 
-        stage('🚀 Exécution des tests') {
+        stage('🚀 Exécution des tests Cypress') {
             steps {
                 script {
+                    echo ""
                     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-                    echo "   EXÉCUTION DES TESTS CYPRESS"
+                    echo "   🚀 EXÉCUTION DES TESTS CYPRESS"
                     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
                     echo ""
                 }
@@ -68,7 +69,7 @@ pipeline {
                             BROWSER=electron
                         fi
 
-                        # Exécution des tests avec les reporters configurés
+                        # Exécution des tests
                         npx cypress run \
                             --browser "$BROWSER" \
                             --headless \
@@ -79,10 +80,10 @@ pipeline {
                 script {
                     echo ""
                     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-                    echo "   TRAITEMENT DES RAPPORTS"
+                    echo "   📊 TRAITEMENT DES RAPPORTS"
                     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
-                    // Fusionner les rapports Mochawesome si plusieurs fichiers JSON existent
+                    // Compter les fichiers JSON
                     def mochawesomeFiles = sh(
                         script: 'ls -1 mochawesome-report/*.json 2>/dev/null | wc -l',
                         returnStdout: true
@@ -95,7 +96,7 @@ pipeline {
                             npx marge mochawesome-report/merged.json -o mochawesome-report \
                                 --reportTitle "Tests Revers.io" \
                                 --reportPageTitle "Rapport de Tests Cypress" \
-                                --inline
+                                --inline 2>/dev/null || true
                         '''
                     } else if (mochawesomeFiles == 1) {
                         echo "📊 Génération du rapport Mochawesome..."
@@ -104,118 +105,161 @@ pipeline {
                             npx marge "$REPORT_FILE" -o mochawesome-report \
                                 --reportTitle "Tests Revers.io" \
                                 --reportPageTitle "Rapport de Tests Cypress" \
-                                --inline
+                                --inline 2>/dev/null || true
                         '''
                     }
 
-                    // Lecture et affichage du résumé des tests
-                    def reportFile = mochawesomeFiles > 1 ? 'mochawesome-report/merged.json' : sh(
-                        script: 'ls mochawesome-report/*.json 2>/dev/null | head -1',
+                    // Analyser les résultats avec shell script (pas besoin de readJSON plugin)
+                    def reportExists = sh(
+                        script: 'test -f mochawesome-report/merged.json && echo "true" || test -f mochawesome-report/mochawesome.json && echo "true" || echo "false"',
                         returnStdout: true
                     ).trim()
 
-                    if (reportFile && fileExists(reportFile)) {
-                        def report = readJSON file: reportFile
-                        def stats = report.stats
+                    if (reportExists == "true") {
+                        // Extraire les stats via jq ou grep/sed
+                        def statsOutput = sh(
+                            script: '''
+                                REPORT_FILE=$(ls mochawesome-report/*.json 2>/dev/null | head -1)
+                                if [ -f "$REPORT_FILE" ]; then
+                                    if command -v jq >/dev/null 2>&1; then
+                                        # Utiliser jq si disponible
+                                        PASSES=$(jq -r '.stats.passes // 0' "$REPORT_FILE")
+                                        FAILURES=$(jq -r '.stats.failures // 0' "$REPORT_FILE")
+                                        SKIPPED=$(jq -r '.stats.skipped // 0' "$REPORT_FILE")
+                                        TESTS=$(jq -r '.stats.tests // 0' "$REPORT_FILE")
+                                        DURATION=$(jq -r '.stats.duration // 0' "$REPORT_FILE")
+                                    else
+                                        # Fallback: extraction basique avec grep/sed
+                                        PASSES=$(grep -o '"passes":[0-9]*' "$REPORT_FILE" | head -1 | cut -d: -f2)
+                                        FAILURES=$(grep -o '"failures":[0-9]*' "$REPORT_FILE" | head -1 | cut -d: -f2)
+                                        SKIPPED=$(grep -o '"skipped":[0-9]*' "$REPORT_FILE" | head -1 | cut -d: -f2)
+                                        TESTS=$(grep -o '"tests":[0-9]*' "$REPORT_FILE" | head -1 | cut -d: -f2)
+                                        DURATION=$(grep -o '"duration":[0-9]*' "$REPORT_FILE" | head -1 | cut -d: -f2)
+                                        PASSES=${PASSES:-0}
+                                        FAILURES=${FAILURES:-0}
+                                        SKIPPED=${SKIPPED:-0}
+                                        TESTS=${TESTS:-0}
+                                        DURATION=${DURATION:-0}
+                                    fi
+                                    echo "$PASSES|$FAILURES|$SKIPPED|$TESTS|$DURATION"
+                                fi
+                            ''',
+                            returnStdout: true
+                        ).trim()
 
-                        echo ""
-                        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-                        echo "   RÉSULTATS DES TESTS"
-                        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-                        echo ""
-                        echo "  ✅ Tests réussis    : ${stats.passes}"
-                        echo "  ❌ Tests échoués    : ${stats.failures}"
-                        echo "  ⏭️  Tests ignorés    : ${stats.skipped}"
-                        echo "  📊 Total            : ${stats.tests}"
-                        echo "  ⏱️  Durée           : ${Math.round(stats.duration / 1000)}s"
-                        echo ""
-                        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+                        if (statsOutput) {
+                            def stats = statsOutput.split('\\|')
+                            def passes = stats[0] ?: '0'
+                            def failures = stats[1] ?: '0'
+                            def skipped = stats[2] ?: '0'
+                            def tests = stats[3] ?: '0'
+                            def duration = stats[4] ?: '0'
+                            def durationSec = (duration.toInteger() / 1000).round()
 
-                        // Afficher les tests par spec avec icônes
-                        if (report.results) {
                             echo ""
-                            echo "📋 DÉTAIL PAR SPEC:"
+                            echo "╔════════════════════════════════════════════╗"
+                            echo "║                                            ║"
+                            echo "║        📊 RÉSULTATS DES TESTS             ║"
+                            echo "║                                            ║"
+                            echo "╚════════════════════════════════════════════╝"
                             echo ""
-                            report.results.each { result ->
-                                def fileName = result.file ? new File(result.file).name : 'Unknown'
-                                def suiteStats = result.suites[0]?.tests ?: []
-                                def passes = suiteStats.findAll { it.pass }.size()
-                                def failures = suiteStats.findAll { it.fail }.size()
-                                def icon = failures > 0 ? '❌' : '✅'
+                            echo "  ✅ Tests réussis     : ${passes}"
+                            echo "  ❌ Tests échoués     : ${failures}"
+                            echo "  ⏭️  Tests ignorés     : ${skipped}"
+                            echo "  📊 Total             : ${tests}"
+                            echo "  ⏱️  Durée totale     : ${durationSec}s"
+                            echo ""
+                            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
-                                echo "  ${icon} ${fileName}"
-                                echo "     ✅ Réussis: ${passes}  ❌ Échoués: ${failures}"
+                            // Lister les specs avec leur statut
+                            echo ""
+                            echo "📋 DÉTAIL PAR FICHIER DE TESTS:"
+                            echo ""
+
+                            sh '''
+                                REPORT_FILE=$(ls mochawesome-report/*.json 2>/dev/null | head -1)
+                                if [ -f "$REPORT_FILE" ]; then
+                                    if command -v jq >/dev/null 2>&1; then
+                                        jq -r '.results[] | "  " + (if (.suites[0].tests | map(select(.fail == true)) | length) > 0 then "❌" else "✅" end) + " " + (.file | split("/")[-1]) + " → ✅ " + (.suites[0].tests | map(select(.pass == true)) | length | tostring) + " réussis, ❌ " + (.suites[0].tests | map(select(.fail == true)) | length | tostring) + " échoués"' "$REPORT_FILE" 2>/dev/null || echo "  ⚠️  Impossible d'extraire les détails par spec"
+                                    else
+                                        echo "  ℹ️  Installez 'jq' pour voir les détails par spec"
+                                    fi
+                                fi
+                            '''
+
+                            echo ""
+
+                            // Lister les tests échoués
+                            if (failures.toInteger() > 0) {
+                                echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+                                echo ""
+                                echo "❌ LISTE DES TESTS ÉCHOUÉS:"
+                                echo ""
+
+                                sh '''
+                                    REPORT_FILE=$(ls mochawesome-report/*.json 2>/dev/null | head -1)
+                                    if [ -f "$REPORT_FILE" ]; then
+                                        if command -v jq >/dev/null 2>&1; then
+                                            jq -r '.results[].suites[].tests[] | select(.fail == true) | "  ❌ " + .title + "\\n     └─ " + (.err.message // "Erreur inconnue" | split("\\n")[0])' "$REPORT_FILE" 2>/dev/null || echo "  ⚠️  Impossible d'extraire les erreurs"
+                                        else
+                                            echo "  ℹ️  Installez 'jq' pour voir les détails des erreurs"
+                                        fi
+                                    fi
+                                '''
+
+                                echo ""
+                                echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
                             }
-                            echo ""
-                        }
 
-                        // Afficher la liste des tests échoués
-                        if (stats.failures > 0) {
-                            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-                            echo "❌ TESTS ÉCHOUÉS:"
-                            echo ""
-                            report.results.each { result ->
-                                result.suites.each { suite ->
-                                    suite.tests.each { test ->
-                                        if (test.fail) {
-                                            echo "  ❌ ${test.title}"
-                                            if (test.err?.message) {
-                                                def errorMsg = test.err.message.split('\n')[0]
-                                                echo "     └─ ${errorMsg}"
-                                            }
-                                        }
-                                    }
-                                }
+                            // Définir le statut du build
+                            if (failures.toInteger() > 0) {
+                                currentBuild.result = 'UNSTABLE'
+                                echo ""
+                                echo "⚠️  Build marqué comme INSTABLE (${failures} test(s) échoué(s))"
+                            } else {
+                                echo ""
+                                echo "✅ Tous les tests sont passés avec succès !"
                             }
-                            echo ""
-                            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-                        }
-
-                        // Afficher tous les tests avec icônes
-                        echo ""
-                        echo "📝 LISTE COMPLÈTE DES TESTS:"
-                        echo ""
-                        report.results.each { result ->
-                            result.suites.each { suite ->
-                                if (suite.title) {
-                                    echo "  📦 ${suite.title}"
-                                }
-                                suite.tests.each { test ->
-                                    def icon = test.pass ? '✅' : (test.fail ? '❌' : '⏭️')
-                                    def duration = test.duration ? " (${Math.round(test.duration / 1000)}s)" : ""
-                                    echo "     ${icon} ${test.title}${duration}"
-                                }
-                            }
-                        }
-                        echo ""
-
-                        // Définir le statut du build
-                        if (stats.failures > 0) {
-                            currentBuild.result = 'UNSTABLE'
+                        } else {
+                            echo "⚠️  Impossible de lire les statistiques du rapport"
                         }
                     } else {
                         echo "⚠️  Aucun rapport Mochawesome trouvé"
                     }
+
+                    echo ""
                 }
             }
             post {
                 always {
+                    script {
+                        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+                        echo "   📦 ARCHIVAGE DES ARTEFACTS"
+                        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+                    }
+
                     archiveArtifacts artifacts: 'cypress/screenshots/**/*', allowEmptyArchive: true
                     archiveArtifacts artifacts: 'cypress/videos/**/*', allowEmptyArchive: true
                     archiveArtifacts artifacts: 'mochawesome-report/**/*', allowEmptyArchive: true
 
-                    // Publier le rapport HTML si disponible
                     script {
-                        if (fileExists('mochawesome-report/mochawesome.html')) {
-                            publishHTML([
-                                allowMissing: false,
-                                alwaysLinkToLastBuild: true,
-                                keepAll: true,
-                                reportDir: 'mochawesome-report',
-                                reportFiles: 'mochawesome.html',
-                                reportName: '📊 Rapport de Tests',
-                                reportTitles: 'Rapport Cypress'
-                            ])
+                        // Publier le rapport HTML si le plugin est disponible
+                        try {
+                            if (fileExists('mochawesome-report/mochawesome.html')) {
+                                publishHTML([
+                                    allowMissing: false,
+                                    alwaysLinkToLastBuild: true,
+                                    keepAll: true,
+                                    reportDir: 'mochawesome-report',
+                                    reportFiles: 'mochawesome.html',
+                                    reportName: '📊 Rapport de Tests',
+                                    reportTitles: 'Rapport Cypress'
+                                ])
+                                echo "✅ Rapport HTML publié avec succès"
+                            }
+                        } catch (Exception e) {
+                            echo "ℹ️  Plugin HTML Publisher non disponible - Le rapport est archivé dans les artefacts"
+                            echo "   Accédez au rapport via : Build Artifacts → mochawesome-report → mochawesome.html"
                         }
                     }
                 }
@@ -228,19 +272,27 @@ pipeline {
             }
             steps {
                 script {
+                    echo ""
                     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-                    echo "   GÉNÉRATION DU RAPPORT ALLURE"
+                    echo "   📊 GÉNÉRATION DU RAPPORT ALLURE"
                     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
                 }
                 sh 'npx allure generate allure-results --clean -o allure-report'
 
-                allure([
-                    includeProperties: false,
-                    jdk: '',
-                    properties: [],
-                    reportBuildPolicy: 'ALWAYS',
-                    results: [[path: 'allure-results']]
-                ])
+                script {
+                    try {
+                        allure([
+                            includeProperties: false,
+                            jdk: '',
+                            properties: [],
+                            reportBuildPolicy: 'ALWAYS',
+                            results: [[path: 'allure-results']]
+                        ])
+                        echo "✅ Rapport Allure généré avec succès"
+                    } catch (Exception e) {
+                        echo "ℹ️  Plugin Allure non disponible - Le rapport est archivé dans les artefacts"
+                    }
+                }
             }
         }
     }
@@ -250,7 +302,7 @@ pipeline {
             script {
                 echo ""
                 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-                echo "   NETTOYAGE FINAL"
+                echo "   🧹 NETTOYAGE FINAL"
                 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
             }
             sh 'rm -rf cypress_cache .npm || true'
@@ -258,25 +310,42 @@ pipeline {
         success {
             script {
                 echo ""
-                echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-                echo "   ✅ BUILD RÉUSSI"
-                echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+                echo "╔════════════════════════════════════════════╗"
+                echo "║                                            ║"
+                echo "║          ✅ BUILD RÉUSSI !                ║"
+                echo "║                                            ║"
+                echo "║   Tous les tests sont passés avec succès  ║"
+                echo "║                                            ║"
+                echo "╚════════════════════════════════════════════╝"
+                echo ""
             }
         }
         unstable {
             script {
                 echo ""
-                echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-                echo "   ⚠️  BUILD INSTABLE - CERTAINS TESTS ONT ÉCHOUÉ"
-                echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+                echo "╔════════════════════════════════════════════╗"
+                echo "║                                            ║"
+                echo "║       ⚠️  BUILD INSTABLE                  ║"
+                echo "║                                            ║"
+                echo "║   Certains tests ont échoué               ║"
+                echo "║   Consultez le rapport pour plus de       ║"
+                echo "║   détails                                 ║"
+                echo "║                                            ║"
+                echo "╚════════════════════════════════════════════╝"
+                echo ""
             }
         }
         failure {
             script {
                 echo ""
-                echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-                echo "   ❌ BUILD ÉCHOUÉ"
-                echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+                echo "╔════════════════════════════════════════════╗"
+                echo "║                                            ║"
+                echo "║          ❌ BUILD ÉCHOUÉ                  ║"
+                echo "║                                            ║"
+                echo "║   Une erreur critique s'est produite      ║"
+                echo "║                                            ║"
+                echo "╚════════════════════════════════════════════╝"
+                echo ""
             }
         }
     }
